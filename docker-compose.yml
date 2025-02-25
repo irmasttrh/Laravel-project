@@ -1,0 +1,107 @@
+services:
+  
+  #####################################
+  # App
+  #####################################
+  app:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+      args:
+        user: app-user
+        uid: 1000
+    image: app-crudd # Sesuaikan nama image untuk proyek baru
+    container_name: app-crudd # Sesuaikan nama kontainer jika diperlukan
+    restart: unless-stopped
+    environment:
+      DB_HOST: ${DB_HOST} # Sesuaikan DB_HOST jika nama layanan database berubah
+      DB_DATABASE: ${DB_DATABASE} # Sesuaikan variabel ini di file .env
+      DB_USERNAME: ${DB_USERNAME} # Sesuaikan variabel ini di file .env
+      DB_PASSWORD: ${DB_PASSWORD} # Sesuaikan variabel ini di file .env
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - ./docker/php/php.ini:/usr/local/etc/php/php.ini
+      - /etc/command_logger.sh:/etc/command_logger.sh
+    depends_on:
+      - mysql
+    networks:
+      - net-crudd
+
+ 
+  #####################################
+  # MySQL Database
+  #####################################
+  mysql:
+    image: mysql:8.4.0-oraclelinux8
+    container_name: mysql-crudd # Sesuaikan nama kontainer jika diperlukan
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FORWARD_DB_PORT}:${DB_PORT}"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD} # Sesuaikan variabel ini di file .env
+      MYSQL_DATABASE: ${DB_DATABASE} # Sesuaikan variabel ini di file .env
+      MYSQL_USER: ${DB_USERNAME} # Sesuaikan variabel ini di file .env
+      MYSQL_PASSWORD: ${DB_PASSWORD} # Sesuaikan variabel ini di file .env
+    volumes:
+      - "mysql:/var/lib/mysql"
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    networks:
+      - net-crudd
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "mysql"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  #####################################
+  # phpMyAdmin
+  #####################################
+  pma:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: pma-crudd # Sesuaikan nama kontainer jika diperlukan
+    restart: unless-stopped
+    #ports: # comment if using reserve proxy
+    #  - "8181:80"
+    environment:
+      PMA_HOST: ${DB_HOST} # Sesuaikan DB_HOST jika nama layanan database berubah
+      PMA_PORT: ${DB_PORT} # Sesuaikan port jika diperlukan
+      PMA_ABSOLUTE_URI: ${APP_URL}/pma/ # Sesuaikan URL jika perlu
+      MAX_EXECUTION_TIME: 3600 # max = 1 jam (untuk import DB agar tidak re-submit)
+      UPLOAD_LIMIT: 300M
+    depends_on:
+      - mysql
+    networks:
+      - net-crudd
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "mysql", "-u", "root", "-p${DB_PASSWORD}"]
+      interval: 30s
+      retries: 5
+      start_period: 10s
+      timeout: 10s
+
+  #####################################
+  # Nginx
+  #####################################
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-crudd
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT}:80"
+      - "${FORWARD_SSH_PORT}:443"
+    volumes:
+      - ./:/var/www/html
+      - ./docker/nginx:/etc/nginx/conf.d
+      - ./docker/ssl:/etc/nginx/ssl
+    depends_on:
+      - app
+    networks:
+      - net-crudd
+
+networks:
+  net-crudd:
+    driver: bridge
+volumes:
+  mysql:
+    driver: local

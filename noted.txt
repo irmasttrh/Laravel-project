@@ -1,0 +1,23 @@
+1. Copy folder docker and file docker-compose.yml to project
+2. Setting permission folder docker and storage
+	sudo chown -R $USER:www-data ./docker
+	sudo chown -R $USER:www-data ./storage
+3. Add configuration file env
+	#env
+	APP_PORT=1001
+	FORWARD_DB_PORT=3307
+	FORWARD_SSH_PORT=444
+4. Build and Running Docker
+	docker compose build --no-cache && docker compose up -d
+
+5. (Optional)
+	php artisan key:generate
+	php artisan migrate:fresh —seed
+	php artisan storage:unlink
+	php artisan config:cache
+	php artisan route:cache
+	php artisan view:cache
+	php artisan cache:clear
+	
+
+
